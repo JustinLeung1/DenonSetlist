@@ -1,4 +1,4 @@
-# setListPython
+# Denon Setlist
 
 Pulls a setlist (tracklist) for your DJ sessions by matching the WAV recording on your Engine DJ USB drive against the play history in Engine DJ's own database — and optionally uploads the session straight to SoundCloud with the tracklist as the description.
 
