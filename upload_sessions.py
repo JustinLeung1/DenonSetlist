@@ -16,7 +16,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import requests
 from dotenv import load_dotenv
 
-from main import find_sessions_path, list_wav_sessions, get_setlist, get_wav_duration
+from main import find_sessions_path, list_wav_sessions, get_setlist, get_wav_duration, build_title, select_sessions_multi
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -230,12 +230,6 @@ def build_description(setlist):
         for i, t in enumerate(setlist, 1)
     ]
     return "\n".join(lines)
-
-
-def build_title(name, ctime):
-    base = os.path.splitext(name)[0]
-    date_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d")
-    return f"{base} - {date_str}"
 
 
 def upload_session(file_path, name, ctime, db_path, privacy):
@@ -489,24 +483,23 @@ def main():
         print("No new sessions to upload — everything is already in the manifest.")
         return
 
-    print(f"Found {len(new_sessions)} new session(s):")
-    for _, name, ctime in new_sessions:
-        date_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %I:%M %p")
-        print(f"  - {name}  [{date_str}]")
-
     if args.dry_run:
+        print(f"Found {len(new_sessions)} new session(s):")
+        for _, name, ctime in new_sessions:
+            date_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %I:%M %p")
+            print(f"  - {name}  [{date_str}]")
         print("\nDry run — nothing uploaded.")
         return
 
-    if not args.yes:
-        confirm = input(
-            f"\nUpload these {len(new_sessions)} session(s) to SoundCloud as '{args.privacy}'? [y/N]: "
-        ).strip().lower()
-        if confirm != "y":
+    if args.yes:
+        to_upload = new_sessions
+    else:
+        to_upload = select_sessions_multi(new_sessions)
+        if not to_upload:
             print("Aborted.")
             return
 
-    for file_path, name, ctime in new_sessions:
+    for file_path, name, ctime in to_upload:
         print(f"\nUploading {name}...")
         try:
             track = upload_session(file_path, name, ctime, db_path, args.privacy)

@@ -86,7 +86,7 @@ def get_setlist(file_path, db_path):
     cursor = conn.cursor()
 
     query = """
-        SELECT t.title, t.artist
+        SELECT t.title, t.artist, hle.startTime
         FROM Track t
         JOIN HistorylistEntity hle ON hle.trackId = t.id
         WHERE hle.startTime > ? AND hle.startTime < ?
@@ -96,7 +96,20 @@ def get_setlist(file_path, db_path):
     results = cursor.fetchall()
     conn.close()
 
-    return [{"title": row[0], "artist": row[1]} for row in results]
+    return [
+        {
+            "title": row[0],
+            "artist": row[1],
+            "offset_seconds": max(0, round(row[2] - start_time)),
+        }
+        for row in results
+    ]
+
+
+def build_title(name, ctime):
+    base = os.path.splitext(name)[0]
+    date_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d")
+    return f"{base} - {date_str}"
 
 
 def format_duration(seconds):
@@ -160,6 +173,59 @@ def select_session(sessions):
             print(f"  Please enter a number between 1 and {len(sessions)}.")
         else:
             print("  Invalid input. Enter a number, 'a', or 'q'.")
+
+
+def _parse_session_selection(choice, count):
+    """Parses input like '1,3,5' or '1-4,7' into a sorted list of 1-based indices."""
+    indices = set()
+    for part in choice.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start, _, end = part.partition("-")
+            start, end = int(start), int(end)
+            if start < 1 or end > count or start > end:
+                raise ValueError(f"Range '{part}' is out of bounds (1-{count}).")
+            indices.update(range(start, end + 1))
+        else:
+            n = int(part)
+            if n < 1 or n > count:
+                raise ValueError(f"'{n}' is out of bounds (1-{count}).")
+            indices.add(n)
+    if not indices:
+        raise ValueError("No valid selection entered.")
+    return sorted(indices)
+
+
+def select_sessions_multi(sessions):
+    """Prompts the user to pick one or more sessions by number (e.g. '1,3,5' or '1-4'),
+    'a' for all, or 'q' to cancel. Returns a list of selected sessions, or None if cancelled."""
+    print("\nSessions:")
+    print("-" * 50)
+    for i, (file_path, name, ctime) in enumerate(sessions, 1):
+        date_str = datetime.fromtimestamp(ctime).strftime("%Y-%m-%d %I:%M %p")
+        print(f"  {i:>3}. [{date_str}]  {name}")
+    print("-" * 50)
+    print("   a. Select all")
+    print("   q. Cancel")
+    print()
+
+    while True:
+        choice = input("Select session(s) (e.g. 1,3,5 or 1-4), 'a' for all, 'q' to cancel: ").strip().lower()
+
+        if choice == 'q':
+            return None
+        if choice == 'a':
+            return list(sessions)
+
+        try:
+            picked = _parse_session_selection(choice, len(sessions))
+        except ValueError as e:
+            print(f"  {e}")
+            continue
+
+        return [sessions[i - 1] for i in picked]
 
 
 def main():
